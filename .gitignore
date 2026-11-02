@@ -1,0 +1,26 @@
+# common.gitignore
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+credentials.*
+secrets.*
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.log
+logs/
+tmp/
+temp/
+Output/
+publish/
+TestResults.xml
+coverage.xml
+.psscriptanalyzer/
+.claude/worktrees/
+.claude/settings.local.json

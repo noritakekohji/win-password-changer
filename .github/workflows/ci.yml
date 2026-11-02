@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  powershell:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PSScriptAnalyzer
+        shell: powershell
+        run: Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force
+      - name: Lint, parse, and dry-run
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = (Resolve-Path '.\Set-LocalAccountPasswords.ps1').Path
+          $findings = @(Invoke-ScriptAnalyzer -Path $script)
+          if ($findings.Count -gt 0) {
+            $findings | Format-Table RuleName, Severity, Line, Message -Wrap
+            throw 'PSScriptAnalyzer found issues.'
+          }
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | Format-List
+            throw 'PowerShell syntax validation failed.'
+          }
+
+          $user = Get-LocalUser | Select-Object -First 1
+          if ($null -eq $user) {
+            throw 'No local user is available for dry-run validation.'
+          }
+
+          $log = Join-Path $env:RUNNER_TEMP 'win-password-changer-dry-run.log'
+          & $script -DryRun -UserName $user.Name -LogPath $log
+          if ($LASTEXITCODE -ne 0) {
+            throw 'CLI dry-run failed.'
+          }
+
+          $logContent = Get-Content -LiteralPath $log -Raw
+          if ($logContent -notmatch 'DRY-RUN target count: 1' -or $logContent -notmatch [regex]::Escape($user.Name)) {
+            throw 'Dry-run log did not contain the selected local account.'
+          }
